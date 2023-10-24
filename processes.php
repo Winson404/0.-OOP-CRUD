@@ -1,116 +1,148 @@
 <?php 
 
-	require_once 'db_connection.php';
+	include 'includes/config.php';
 	include 'includes/function_create.php';
-	
-	// USER LOGIN
-	if (isset($_POST['login'])) {
-	    $email = $_POST['email'];
-	    $password = $_POST['password'];
 
-	    // Validate and sanitize input
-	    $email = filter_var($email, FILTER_VALIDATE_EMAIL);
-	    $password = trim($password);
+	// use PHPMailer\PHPMailer\PHPMailer;
+    // use PHPMailer\PHPMailer\Exception;
+    // require 'vendor/PHPMailer/src/Exception.php';
+    // require 'vendor/PHPMailer/src/PHPMailer.php';
+    // require 'vendor/PHPMailer/src/SMTP.php';
 
-	    if ($email === false) {
-	        // Invalid email format
-	        displaySaveMessage(false, "login.php");
-	    } else {
-	        // Check if the user has attempted to log in before
-	        if (!isset($_SESSION['login_attempts'])) {
-	            $_SESSION['login_attempts'] = 0;
-	        }
 
-	        // Check if the user has reached the maximum number of login attempts
-	        if ($_SESSION['login_attempts'] > 3) {
-	            // Check if the user has been blocked for 10 minutes
-	            if (time() - $_SESSION['last_login_attempt'] <= 600) {
-	                // User is still blocked, display an error message and exit
-	                displayErrorMessage("You have been blocked for 10 minutes due to multiple failed login attempts.", "login.php");
-	            } else {
-	                // Block has expired, reset the login attempts counter
-	                $_SESSION['login_attempts'] = 0;
-	            }
-	        }
+	// USERS LOGIN - LOGIN.PHP
+	if(isset($_POST['login'])) {
+		$email    = $_POST['email'];
+		$password = md5($_POST['password']);
 
-	        $userLogin = new Userlogin();
-	        $userLogin->login($email, $password);
-	    }
+		// Check if the user has attempted to log in before
+		if (!isset($_SESSION['login_attempts'])) {
+		    $_SESSION['login_attempts'] = 0;
+		}
+
+		// Check if the user has reached the maximum number of login attempts
+		if ($_SESSION['login_attempts'] > 3) {
+		    // Check if the user has been blocked for 30 minutes
+		    if (time() - $_SESSION['last_login_attempt'] <= 600) {
+		        // User is still blocked, display an error message and exit
+				displayErrorMessage("You have been blocked for 10 minutes due to multiple failed login attempts.", "login.php");
+		    } else {
+		        // Block has expired, reset the login attempts counter
+		        $_SESSION['login_attempts'] = 0;
+		    }
+		}
+
+
+		$check = mysqli_query($conn, "SELECT * FROM users WHERE email='$email' AND password='$password'");
+		if(mysqli_num_rows($check)===1) {
+			$row = mysqli_fetch_array($check);
+			$position = $row['user_type'];
+
+			$log_ID = $row['user_Id'];
+			$login_time = date("Y-m-d h:i A");
+			$login = mysqli_query($conn, "INSERT INTO log_history (user_Id, login_time) VALUES ('$log_ID', '$login_time')");
+
+			if($position == 'Admin') {
+				$_SESSION['login_attempts'] = 0;
+	    		$_SESSION['last_login_attempt'] = time();
+				$_SESSION['admin_Id'] = $row['user_Id'];
+				$_SESSION['login_time'] = $login_time;
+				header("Location: Admin/dashboard.php");
+				exit();
+			} else {
+				$_SESSION['login_attempts'] = 0;
+	    		$_SESSION['last_login_attempt'] = time();
+				$_SESSION['user_Id'] = $row['user_Id'];
+				$_SESSION['login_time'] = $login_time;
+				header("Location: User/profile.php");
+				exit();
+			}
+		} else {
+		    $_SESSION['login_attempts']++;
+		    $_SESSION['last_login_attempt'] = time();
+			displayErrorMessage("Incorrect password.", "login.php");
+		}
 	}
 
 
 
 
 
-
-
-	// Handle form submission
+	// REGISTER USER - REGISTER.PHP 
 	if (isset($_POST['create_user'])) {
-	    // Create a new instance of UserCreator
-	    $userCreator = new UserCreator();
-
-	    // Establish database connection
-	    $conn = $userCreator->getConnection();
-	    
-	    $firstname       = $_POST['firstname'];
-	    $middlename      = $_POST['middlename'];
-	    $lastname        = $_POST['lastname'];
-	    $suffix          = $_POST['suffix'];
-	    $dob             = $_POST['dob'];
-	    $age             = $_POST['age'];
-	    $birthplace      = $_POST['birthplace'];
-	    $gender          = $_POST['gender'];
-	    $civilstatus     = $_POST['civilstatus'];
-	    $occupation      = $_POST['occupation'];
-	    $religion        = $_POST['religion'];
-	    $email           = $_POST['email'];
-	    $contact         = $_POST['contact'];
-	    $house_no        = $_POST['house_no'];
-	    $street_name     = $_POST['street_name'];
-	    $purok           = $_POST['purok'];
-	    $zone            = $_POST['zone'];
-	    $barangay        = $_POST['barangay'];
-	    $municipality    = $_POST['municipality'];
-	    $province        = $_POST['province'];
-	    $region          = $_POST['region'];
-	    $password		 = $_POST['password'];
-	    $date_registered = date('Y-m-d h:i:s A');
-
-	    // Check if email already exists
-	    $emailExists = $userCreator->checkEmailExists($email);
-	    if ($emailExists) {
-	        displayErrorMessage("Email already exists.", "register.php");
-	        exit(); // Stop further execution
-	    }
+		saveUser($conn, "register.php");
+	}
 
 
-        $target_dir = 'images-users/';
-		$imageFileType = strtolower(pathinfo($_FILES["fileToUpload"]["name"], PATHINFO_EXTENSION));
-		$uniqueFilename = uniqid() . '.' . $imageFileType;
-		$image = $target_dir . $uniqueFilename;
-		$uploadOk = 1;
-		$check = getimagesize($_FILES["fileToUpload"]["tmp_name"]);
 
-		if ($check == false) {
-		    displayErrorMessage("File is not an image.", $page);
-		    $uploadOk = 0;
-		} elseif ($_FILES["fileToUpload"]["size"] > 500000) {
-		    displayErrorMessage("File must be up to 500KB in size.", $page);
-		    $uploadOk = 0;
-		} elseif ($imageFileType != "jpg" && $imageFileType != "png" && $imageFileType != "jpeg" && $imageFileType != "gif") {
-		    displayErrorMessage("Only JPG, JPEG, PNG & GIF files are allowed.", $page);
-		    $uploadOk = 0;
-		} elseif ($uploadOk == 0) {
-		    displayErrorMessage("Your file was not uploaded.", $page);
+
+
+	// SEARCH EMAIL - FORGOT-PASSWORD.PHP
+	if(isset($_POST['search'])) {
+      $email = mysqli_real_escape_string($conn, $_POST['email']);
+      $fetch = mysqli_query($conn, "SELECT * FROM users WHERE email='$email'");
+      if(mysqli_num_rows($fetch) > 0) {
+      	$row = mysqli_fetch_array($fetch);
+      	$user_Id = $row['user_Id'];
+      	header("Location: sendcode.php?user_Id=".$user_Id);
+      	exit();
+      } else {
+		displayErrorMessage("Email not found.", "forgot-password.php");
+      }
+	}
+
+
+
+
+
+	// SEND CODE - SENDCODE.PHP
+	if(isset($_POST['sendcode'])) {
+	    $email    = $_POST['email'];
+	    $user_Id  = $_POST['user_Id'];
+	    $key      = substr(number_format(time() * rand(), 0, '', ''), 0, 6);
+
+	    $insert_code = mysqli_query($conn, "UPDATE users SET verification_code='$key' WHERE email='$email' AND user_Id='$user_Id'");
+	    if($insert_code) {
+
+	      $subject = 'Verification code';
+	      $message = '<p>Good day sir/maam '.$email.', your verification code is <b>'.$key.'</b>. Please do not share this code to other people. Thank you!</p>
+	      <p>You can change your password by just clicking it <a href="http://localhost/PROJECT%200.%20My%20NEW%20Template%20System/changepassword.php?user_Id='.$user_Id.'">here!</a></p> 
+	      <p><b>NOTE:</b> This is a system generated email. Please do not reply.</p> ';
+
+    	  sendEmail($subject, $message, $email, "verifycode.php?user_Id=".$user_Id."&&email=".$email);    
 		} else {
-		    if (move_uploaded_file($_FILES["fileToUpload"]["tmp_name"], $image)) {
-		        // Create a new user
-		        $userCreator->createUser($firstname, $middlename, $lastname, $suffix, $dob, $age, $birthplace, $gender, $civilstatus, $occupation, $religion, $email, $contact, $house_no, $street_name, $purok, $zone, $barangay, $municipality, $province, $region, $password, $image, $date_registered);
-		    } else {
-		        displayErrorMessage("There was an error uploading your profile picture.", $page);
-		    }
+			displayErrorMessage("Something went wrong while generating verification code through email.", "sendcode.php?user_Id=".$user_Id);
+		} 
+	}
+
+
+
+
+	// VERIFY CODE - VERIFYCODE.PHP
+	if(isset($_POST['verify_code'])) {
+	    $user_Id = $_POST['user_Id'];
+	    $email   = $_POST['email'];
+	    $code    = mysqli_real_escape_string($conn, $_POST['code']);
+	    $fetch = mysqli_query($conn, "SELECT * FROM users WHERE email='$email' AND verification_code='$code' AND user_Id='$user_Id'");
+	    if(mysqli_num_rows($fetch) > 0) {
+			header("Location: changepassword.php?user_Id=".$user_Id);
+			exit();
+		} else {
+			displayErrorMessage("Verification code is incorrect.", "verifycode.php?user_Id=".$user_Id."&&email=".$email);
 		}
-	    
+	}
+
+
+
+
+
+	// CHANGE PASSWORD - CHANGEPASSWORD.PHP
+	if(isset($_POST['changepassword'])) {
+		$user_Id   = $_POST['user_Id'];
+		$cpassword = md5($_POST['cpassword']);
+
+		$update = mysqli_query($conn, "UPDATE users SET password='$cpassword' WHERE user_Id='$user_Id' ");
+		displayUpdateMessage($update, "Password has been changed.", "login.php", "changepassword.php?user_Id=".$user_Id);
 	}
 
 
